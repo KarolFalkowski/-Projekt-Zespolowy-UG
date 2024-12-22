@@ -46,9 +46,4 @@ class User extends Authenticatable
             'password' => 'hashed',
         ];
     }
-
-    public function reminders(): HasMany
-    {
-        return $this->hasMany(Reminder::class);
-    }
 }

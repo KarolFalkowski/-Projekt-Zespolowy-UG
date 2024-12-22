@@ -15,9 +15,4 @@ class Reminder extends Model
       self::FIELD_MESSAGE,
       self::FIELD_REMINDER_TIME
     ];
-
-    public function user(): BelongsTo
-    {
-        return $this->belongsTo(User::class);
-    }
 }
