@@ -9,24 +9,22 @@ return new class extends Migration
     const TABLE_NAME = 'reminders';
 
     /**
-     * @return void
+     * Run the migrations.
      */
     public function up(): void
     {
-        Schema::create(self::TABLE_NAME, function (Blueprint $table) {
-            $table->id();
-            $table->string('user_id');
-            $table->string('message');
-            $table->timestamp('reminder_time');
-            $table->timestamps();
+        Schema::table(self::TABLE_NAME, function (Blueprint $table) {
+            $table->enum('status', ['sent', 'wait', 'error'])->after('user_id');
         });
     }
 
     /**
-     * @return void
+     * Reverse the migrations.
      */
     public function down(): void
     {
-        Schema::dropIfExists(self::TABLE_NAME);
+        Schema::table(self::TABLE_NAME, function (Blueprint $table) {
+            $table->dropColumn('status');
+        });
     }
 };

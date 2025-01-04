@@ -35,4 +35,9 @@ return [
         ],
     ],
 
+    'facebook' => [
+        'fb_page_access_token' => env('FB_PAGE_ACCESS_TOKEN'),
+        'fb_verify_token' => env('FB_VERIFY_TOKEN')
+    ]
+
 ];
