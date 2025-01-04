@@ -3,11 +3,12 @@
 namespace App\Console\Commands;
 
 use App\Models\ReminderStatusEnum;
+use App\Services\FacebookService;
 use GuzzleHttp\Exception\GuzzleException;
 use Illuminate\Console\Command;
 use App\Models\Reminder;
 use Carbon\Carbon;
-use GuzzleHttp\Client;
+use Illuminate\Support\Facades\Log;
 
 class CheckReminders extends Command
 {
@@ -16,10 +17,10 @@ class CheckReminders extends Command
 
 
     /**
+     * @param FacebookService $facebookService
      * @return void
-     * @throws GuzzleException
      */
-    public function handle(): void
+    public function handle(FacebookService $facebookService): void
     {
         $now = Carbon::now();
 
@@ -28,31 +29,18 @@ class CheckReminders extends Command
             ->get();
 
         foreach ($reminders as $reminder) {
-            $this->sendMessage($reminder->user_id, $reminder->message);
+            try {
+                $facebookService->sendMessage($reminder->{Reminder::FIELD_USER_ID}, $reminder->{Reminder::FIELD_MESSAGE});
+            } catch (GuzzleException $e) {
+                $reminder->update([
+                    Reminder::FIELD_STATUS => ReminderStatusEnum::Error
+                ]);
+                Log::error('Facebook error: '. $e->getMessage());
+            }
 
             $reminder->update([
                 Reminder::FIELD_STATUS => ReminderStatusEnum::Sent
             ]);
         }
-    }
-
-    /**
-     * @param $recipientId
-     * @param $message
-     * @return void
-     * @throws GuzzleException
-     */
-    private function sendMessage($recipientId, $message): void
-    {
-        $pageAccessToken = config('services.facebook.fb_page_access_token');
-        $url = "https://graph.facebook.com/v13.0/me/messages?access_token={$pageAccessToken}";
-
-        $client = new Client();
-        $client->post($url, [
-            'json' => [
-                'recipient' => ['id' => $recipientId],
-                'message' => ['text' => $message],
-            ],
-        ]);
     }
 }

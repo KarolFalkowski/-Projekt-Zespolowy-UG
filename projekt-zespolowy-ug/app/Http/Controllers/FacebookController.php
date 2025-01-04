@@ -4,7 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Reminder;
 use App\Models\ReminderStatusEnum;
-use GuzzleHttp\Client;
+use App\Services\FacebookService;
 use GuzzleHttp\Exception\GuzzleException;
 use Illuminate\Contracts\Routing\ResponseFactory;
 use Illuminate\Foundation\Application;
@@ -16,13 +16,10 @@ use Illuminate\Support\Facades\Log;
 class FacebookController extends Controller
 {
 
-    private $verifyToken;
-    private $pageAccessToken;
-    public function __construct()
+    private FacebookService $facebookService;
+    public function __construct(FacebookService $facebookService)
     {
-
-        $this->verifyToken = config('services.facebook.fb_verify_token');
-        $this->pageAccessToken = config('services.facebook.fb_page_access_token');
+        $this->facebookService = $facebookService;
     }
 
     /**
@@ -31,11 +28,7 @@ class FacebookController extends Controller
      */
     public function verifyWebhook(Request $request): Application|Response|ResponseFactory
     {
-        if ($request->hub_verify_token === $this->verifyToken) {
-            return response($request->hub_challenge, 200);
-        }
-
-        return response('Unauthorized', 403);
+        return $this->facebookService->verifyWebhook($request);
     }
 
     /**
@@ -67,16 +60,26 @@ class FacebookController extends Controller
         $reminderData = $this->parseEvent($messageText);
 
         if ($reminderData) {
-            Reminder::create([
+            $reminder = Reminder::create([
                 Reminder::FIELD_USER_ID => $senderId,
                 Reminder::FIELD_MESSAGE => $reminderData['eventName'],
                 Reminder::FIELD_REMINDER_TIME => Carbon::create($reminderData['time']),
                 Reminder::FIELD_STATUS => ReminderStatusEnum::Wait,
             ]);
-
-            $this->sendMessage($senderId, "Przypomnienie zostało zapisane!");
+            try {
+                $this->facebookService->sendMessage($senderId, "Przypomnienie zostało zapisane!");
+            } catch (GuzzleException $e) {
+                $reminder->update([
+                    Reminder::FIELD_STATUS => ReminderStatusEnum::Error
+                ]);
+                Log::error('Facebook error: '. $e->getMessage());
+            }
         } else {
-            $this->sendMessage($senderId, "Nie rozumiem wiadomości. Spróbuj: '4.01.2025 12:35 Wizyta u lekarza'.");
+            try {
+                $this->facebookService->sendMessage($senderId, "Nie rozumiem wiadomości. Spróbuj: '4.01.2025 12:35 Wizyta u lekarza'.");
+            } catch (GuzzleException $e) {
+                Log::error('Facebook error: '. $e->getMessage());
+            }
         }
     }
 
@@ -97,25 +100,5 @@ class FacebookController extends Controller
         } else {
             return [];
         }
-    }
-
-    /**
-     * @param $recipientId
-     * @param $message
-     * @return void
-     * @throws GuzzleException
-     */
-    private function sendMessage($recipientId, $message): void
-    {
-
-        $url = "https://graph.facebook.com/v13.0/me/messages?access_token={$this->pageAccessToken}";
-
-        $client = new Client();
-        $client->post($url, [
-            'json' => [
-                'recipient' => ['id' => $recipientId],
-                'message' => ['text' => $message],
-            ],
-        ]);
     }
 }
